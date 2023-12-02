@@ -54,6 +54,32 @@ fn game_is_possible(game: &Game, bag: &HashMap<String, u32>) -> bool {
     return true;
 }
 
+fn get_min_power(game: &Game) -> u32 {
+    let mut min_cubes = HashMap::<String, u32>::new();
+
+    for hand in &game.hands {
+        for (color, n_cubes) in hand.into_iter() {
+            match min_cubes.get(color) {
+                None => {
+                    min_cubes.insert(color.to_string(), *n_cubes);
+                }
+                Some(n_already) => {
+                    if n_cubes > &n_already {
+                        min_cubes.insert(color.to_string(), *n_cubes);
+                    }
+                }
+            }
+        }
+    }
+
+    let mut power = 1;
+    for (_, n_cubes) in min_cubes.into_iter() {
+        power *= n_cubes;
+    }
+
+    return power;
+}
+
 fn main() -> io::Result<()> {
     let args: Vec<String> = env::args().collect();
     let fname = &args[1];
@@ -67,7 +93,8 @@ fn main() -> io::Result<()> {
         (String::from("blue"), 14),
     ]);
 
-    let mut sum = 0;
+    let mut id_sum = 0;
+    let mut power_sum = 0;
 
     for l in reader.lines() {
         let line = String::from(l?);
@@ -75,11 +102,14 @@ fn main() -> io::Result<()> {
         let game = parse_game(line);
 
         if game_is_possible(&game, &bag) {
-            sum += game.id;
+            id_sum += game.id;
         }
+
+        power_sum += get_min_power(&game);
     }
 
-    println!("{}", sum);
+    println!("{}", id_sum);
+    println!("{}", power_sum);
 
     Ok(())
 }

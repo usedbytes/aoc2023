@@ -46,7 +46,7 @@ fn main() -> io::Result<()> {
     let file = File::open(fname)?;
     let reader = io::BufReader::new(file);
 
-    let vmap = HashMap::from([
+    let mut vmap = HashMap::from([
         ("0", 0),
         ("1", 1),
         ("2", 2),
@@ -58,6 +58,22 @@ fn main() -> io::Result<()> {
         ("8", 8),
         ("9", 9),
     ]);
+
+    if args.len() > 2 {
+        let words = HashMap::from([
+            ("zero", 0),
+            ("one", 1),
+            ("two", 2),
+            ("three", 3),
+            ("four", 4),
+            ("five", 5),
+            ("six", 6),
+            ("seven", 7),
+            ("eight", 8),
+            ("nine", 9),
+        ]);
+        vmap.extend(words);
+    }
 
     let mut calibration_values: Vec<i32> = Vec::new();
 

@@ -20,11 +20,11 @@ enum HandType {
 struct Hand {
     hand: String,
     bid: u32,
-
     hand_type: HandType,
 }
 
 const CARD_ORDER: &str = "0123456789TJQKA";
+const JOKERED_ORDER: &str = "J0123456789TQKA";
 
 impl Hand {
     fn new(hand: String, bid: u32) -> Hand {
@@ -55,7 +55,7 @@ impl Hand {
         }
     }
 
-    fn compare(self: &Hand, other: &Hand) -> Ordering {
+    fn compare(self: &Hand, other: &Hand, card_order: &str) -> Ordering {
         if self.hand_type < other.hand_type {
             return Ordering::Less;
         } else if self.hand_type > other.hand_type {
@@ -65,8 +65,8 @@ impl Hand {
             for (i, a) in self.hand.chars().enumerate() {
                 let b = bchars[i];
 
-                let aidx = CARD_ORDER.find(a).unwrap();
-                let bidx = CARD_ORDER.find(b as char).unwrap();
+                let aidx = card_order.find(a).unwrap();
+                let bidx = card_order.find(b as char).unwrap();
                 if aidx != bidx {
                     return aidx.cmp(&bidx);
                 }
@@ -74,6 +74,56 @@ impl Hand {
         }
 
         return Ordering::Equal;
+    }
+
+    fn new_jokered(hand: String, bid: u32) -> Hand {
+        return Hand{
+            hand_type: Hand::get_jokered_type(&hand),
+            hand,
+            bid,
+        }
+    }
+
+    fn get_jokered_type(hand: &String) -> HandType {
+        let mut cards = HashMap::new();
+
+        let mut jokers = 0;
+        for letter in hand.chars() {
+            if letter == 'J' {
+                jokers += 1;
+            } else {
+                *cards.entry(letter).or_insert(0) += 1
+            }
+        }
+
+        // This is a bit of a hack, but I'm bored now.
+        if jokers == 5 {
+            cards.insert('J', 5);
+            jokers = 0;
+        }
+
+        // Assign the jokers to the most plentiful card face
+        let max = cards.values().max().unwrap();
+        for (letter, num) in cards.iter() {
+            if num == max {
+                cards.entry(*letter).and_modify(|v| *v += jokers);
+                break;
+            }
+        }
+
+        // Recalculate the max
+        let max = cards.values().max().unwrap();
+
+        match (cards.len(), max) {
+            (5, _) => HandType::HighCard,
+            (4, _) => HandType::OnePair,
+            (3, 2) => HandType::TwoPair,
+            (3, 3) => HandType::ThreeOfAKind,
+            (2, 3) => HandType::FullHouse,
+            (2, 4) => HandType::FourOfAKind,
+            (1, _) => HandType::FiveOfAKind,
+            _ => panic!(),
+        }
     }
 }
 
@@ -100,10 +150,28 @@ fn main() -> io::Result<()> {
         );
     }
 
-    hands.sort_by(|a, b| a.compare(b));
+    hands.sort_by(|a, b| a.compare(b, CARD_ORDER));
 
     let mut score = 0;
     for (rank, hand) in hands.iter().enumerate() {
+        score += (rank as u32 + 1) * hand.bid;
+    }
+
+    println!("{}", score);
+
+    let mut jokered_hands = Vec::new();
+    for hand in hands.iter() {
+        jokered_hands.push(
+            Hand::new_jokered(
+                hand.hand.to_string(),
+                hand.bid
+            )
+        )
+    }
+
+    jokered_hands.sort_by(|a, b| a.compare(b, JOKERED_ORDER));
+    let mut score = 0;
+    for (rank, hand) in jokered_hands.iter().enumerate() {
         score += (rank as u32 + 1) * hand.bid;
     }
 

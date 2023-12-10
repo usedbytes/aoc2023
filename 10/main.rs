@@ -14,12 +14,7 @@ enum Direction {
     West = b'W',
 }
 
-#[derive(Debug)]
-struct Pipe {
-    ends: [Direction; 2],
-    left_side: Vec<(i32, i32)>, // If entering from ends[0]
-    right_side: Vec<(i32, i32)>,
-}
+type Pipe = [Direction; 2];
 
 fn flip(d: &Direction) -> Direction {
     match d {
@@ -33,7 +28,7 @@ fn flip(d: &Direction) -> Direction {
 fn trace_path(
     map: &HashMap<(i32, i32), Pipe>,
     start: &(i32, i32)
-) -> (Vec<(i32, i32)>, BTreeSet<(i32, i32)>) {
+) -> Vec<(i32, i32)> {
     let move_dirs = HashMap::from([
         (Direction::North, (0, -1)),
         (Direction::East, (1, 0)),
@@ -43,33 +38,21 @@ fn trace_path(
 
     let mut path = Vec::new();
 
-    let mut side_a = BTreeSet::new();
-
     let mut current_pos = *start;
     let mut pipe = map.get(&current_pos).unwrap();
-    let mut going = pipe.ends[1];
+    let mut going = pipe[1];
     loop {
         path.push(current_pos);
-        if going == pipe.ends[1] {
-            for p in &pipe.left_side {
-                side_a.insert(*p);
-            }
-        } else {
-            for p in &pipe.right_side {
-                side_a.insert(*p);
-            }
-        }
-
         let delta = move_dirs.get(&going).unwrap();
         let next_pos = (current_pos.0 + delta.0, current_pos.1 + delta.1);
 
         pipe = map.get(&next_pos).unwrap();
 
         let coming = flip(&going);
-        if coming == pipe.ends[0] {
-            going = pipe.ends[1];
+        if coming == pipe[0] {
+            going = pipe[1];
         } else {
-            going = pipe.ends[0];
+            going = pipe[0];
         }
 
         if next_pos == *start {
@@ -79,17 +62,44 @@ fn trace_path(
         current_pos = next_pos;
     }
 
-    return (path, side_a);
+    return path;
 }
 
+fn is_inside(
+    path: &BTreeSet<&(i32, i32)>,
+    map: &HashMap<(i32, i32), Pipe>,
+    cell: &(i32, i32)
+) -> bool {
+    let row = cell.1;
+    let col = cell.0;
+
+    let mut crossings = 0;
+    for i in (0..col).rev() {
+        let check = (i, row);
+        if let Some(_) = path.get(&check) {
+            let mp = map.get(&check).unwrap();
+            if mp.contains(&Direction::North) {
+                crossings += 1;
+            }
+        }
+    }
+
+    return (crossings & 1) == 1;
+}
 
 fn find_inside(
     path: &Vec<(i32, i32)>,
+    map: &HashMap<(i32, i32), Pipe>,
     size: &(i32, i32),
-    path_side_a: &BTreeSet<(i32, i32)>,
 ) -> usize {
-    let mut to_search: BTreeSet<(i32, i32)> = BTreeSet::new();
     let path_set = BTreeSet::from_iter(path.iter());
+    let mut outside: BTreeSet<(i32, i32)> = BTreeSet::new();
+    let mut inside: BTreeSet<(i32, i32)> = BTreeSet::new();
+    let mut to_search: BTreeSet<(i32, i32)> = BTreeSet::new();
+
+    for p in &path_set {
+        to_search.insert(**p);
+    }
 
     let move_dirs = HashMap::from([
         (Direction::North, (0, -1)),
@@ -98,99 +108,55 @@ fn find_inside(
         (Direction::West, (-1, 0)),
     ]);
 
-    let mut side_a: BTreeSet<(i32, i32)> = BTreeSet::new();
-    let mut side_a_oob = 0;
-    for p in path_side_a {
-        if path_set.contains(p) {
-            continue;
-        } else if (p.0 < 0) || (p.1 < 0) ||
-            (p.0 > size.0 - 1) || (p.1 > size.1 - 1) {
-            side_a_oob += 1;
-            continue;
-        }
-        to_search.insert(*p);
-        side_a.insert(*p);
-    }
-
     while to_search.len() > 0 {
         let current = to_search.pop_first().unwrap();
-        side_a.insert(current);
         for (_, delta) in &move_dirs {
             let check = (current.0 + delta.0, current.1 + delta.1);
             if (check.0 < 0) || (check.1 < 0) ||
                 (check.0 > size.0 - 1) || (check.1 > size.1 - 1) {
-                side_a_oob += 1;
+                // Out of bounds, do nothing with 'check'
                 continue;
             } else if path_set.contains(&check) {
+                // We already know 'check' is on path, do nothing
                 continue;
-            } else if !side_a.contains(&check) {
+            } else if outside.contains(&check) {
+                if !path_set.contains(&current) {
+                    outside.insert(current);
+                }
+            } else if inside.contains(&check) {
+                if !path_set.contains(&current) {
+                    inside.insert(current);
+                }
+            } else {
                 to_search.insert(check);
+            }
+        }
+
+        if !path_set.contains(&current) &&
+                !outside.contains(&current) &&
+                !inside.contains(&current) {
+            if is_inside(&path_set, map, &current) {
+                inside.insert(current);
+            } else {
+                outside.insert(current);
             }
         }
     }
 
-    let n_total = (size.0 * size.1) as usize;
-
-    if side_a_oob == 0 {
-        return side_a.len();
-    } else {
-        return n_total - side_a.len() - path.len();
-    }
+    return inside.len();
 }
 
 fn main() -> io::Result<()> {
     let args: Vec<String> = env::args().collect();
     let fname = &args[1];
     let file = File::open(fname)?; let reader = io::BufReader::new(file);
-    let pipe_bases: HashMap<char, ([Direction; 2], Vec<(i32, i32)>, Vec<(i32, i32)>)> = HashMap::from([
-        (
-            '|',
-            (
-                [Direction::South, Direction::North],
-                vec![(-1, 0)],
-                vec![(1, 0)],
-            ),
-        ),
-        (
-            '-',
-            (
-                [Direction::West, Direction::East],
-                vec![(0, -1)],
-                vec![(0, 1)],
-            ),
-        ),
-        (
-            '7',
-            (
-                [Direction::West, Direction::South],
-                vec![(1, 0), (0, -1)],
-                vec![],
-            ),
-        ),
-        (
-            'J',
-            (
-                [Direction::North, Direction::West],
-                vec![(1, 0), (0, 1)],
-                vec![],
-            ),
-        ),
-        (
-            'L',
-            (
-                [Direction::East, Direction::North],
-                vec![(-1, 0), (0, 1)],
-                vec![],
-            ),
-        ),
-        (
-            'F',
-            (
-                [Direction::South, Direction::East],
-                vec![(-1, 0), (0, -1)],
-                vec![],
-            ),
-        ),
+    let pipe_ends: HashMap<char, [Direction; 2]> = HashMap::from([
+        ('|', [Direction::South, Direction::North]),
+        ('-', [Direction::West, Direction::East]),
+        ('7', [Direction::West, Direction::South]),
+        ('J', [Direction::North, Direction::West]),
+        ('L', [Direction::East, Direction::North]),
+        ('F', [Direction::South, Direction::East]),
     ]);
 
     let mut map = HashMap::new();
@@ -200,26 +166,11 @@ fn main() -> io::Result<()> {
     for (row, l) in reader.lines().enumerate() {
         let line = l?;
         for (col, letter) in line.chars().enumerate() {
-            if let Some(base) = pipe_bases.get(&letter) {
-                let ends = &base.0;
-
+            if let Some(ends) = pipe_ends.get(&letter) {
                 let cell = (col as i32, row as i32);
-
-                let left = base.1
-                    .iter()
-                    .map(|d| (cell.0 + d.0, cell.1 + d.1))
-                    .collect();
-                let right = base.2
-                    .iter()
-                    .map(|d| (cell.0 + d.0, cell.1 + d.1))
-                    .collect();
                 map.insert(
                     cell,
-                    Pipe{
-                        ends: ends.clone(),
-                        left_side: left,
-                        right_side: right,
-                    }
+                    ends.clone(),
                 );
             } else if letter == 'S' {
                 start = (col as i32, row as i32);
@@ -243,7 +194,7 @@ fn main() -> io::Result<()> {
         let check = (start.0 + delta.0, start.1 + delta.1);
         if let Some(pipe) = map.get(&check) {
             let entry = flip(&dir);
-            if let Some(_) = pipe.ends.iter().position(|v| *v == entry) {
+            if let Some(_) = pipe.iter().position(|v| *v == entry) {
                 start_ends.push(dir);
             }
         }
@@ -251,33 +202,20 @@ fn main() -> io::Result<()> {
 
     assert!(start_ends.len() == 2);
 
-    for (_, base) in pipe_bases.iter() {
-        let ends = &base.0;
+    for (_, ends) in pipe_ends.iter() {
         if start_ends.contains(&ends[0]) && start_ends.contains(&ends[1]) {
             let cell = start;
-            let left = base.1
-                .iter()
-                .map(|d| (cell.0 + d.0, cell.1 + d.1))
-                .collect();
-            let right = base.2
-                .iter()
-                .map(|d| (cell.0 + d.0, cell.1 + d.1))
-                .collect();
             map.insert(
                 cell,
-                Pipe{
-                    ends: ends.clone(),
-                    left_side: left,
-                    right_side: right,
-                }
+                ends.clone(),
             );
         }
     }
 
-    let (path, side_a) = trace_path(&map, &start);
+    let path = trace_path(&map, &start);
     println!("{}", (path.len() + 1) / 2);
 
-    let inside = find_inside(&path, &size, &side_a);
+    let inside = find_inside(&path, &map, &size);
     println!("{}", inside);
 
     Ok(())

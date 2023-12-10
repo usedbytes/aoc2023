@@ -69,7 +69,9 @@ fn trace_path(
 
         let delta = move_dirs.get(&going).unwrap();
         let next_pos = (current_pos.0 + delta.0, current_pos.1 + delta.1);
+
         pipe = map.get(&next_pos).unwrap();
+
         let coming = flip(&going);
         if coming == pipe.ends[0] {
             going = pipe.ends[1];
@@ -88,13 +90,119 @@ fn trace_path(
 }
 
 
+fn find_inside(
+    map: &HashMap<(i32, i32), Pipe>,
+    path: &Vec<(i32, i32)>,
+    size: &(i32, i32),
+    path_side_a: &BTreeSet<(i32, i32)>,
+    path_side_b: &BTreeSet<(i32, i32)>,
+    print: bool,
+) -> usize {
+    let mut to_search: BTreeSet<(i32, i32)> = BTreeSet::new();
+    let mut path_set = BTreeSet::from_iter(path.iter());
+
+    let move_dirs = HashMap::from([
+        (Direction::North, (0, -1)),
+        (Direction::East, (1, 0)),
+        (Direction::South, (0, 1)),
+        (Direction::West, (-1, 0)),
+    ]);
+
+    let mut side_a: BTreeSet<(i32, i32)> = BTreeSet::new();
+    let mut side_a_oob = 0;
+    for p in path_side_a {
+        if path_set.contains(p) {
+            continue;
+        } else if (p.0 < 0) || (p.1 < 0) ||
+            (p.0 > size.0 - 1) || (p.1 > size.1 - 1) {
+            side_a_oob += 1;
+            continue;
+        }
+        to_search.insert(*p);
+        side_a.insert(*p);
+    }
+
+    while to_search.len() > 0 {
+        let current = to_search.pop_first().unwrap();
+        side_a.insert(current);
+        for (dir, delta) in &move_dirs {
+            let check = (current.0 + delta.0, current.1 + delta.1);
+            if (check.0 < 0) || (check.1 < 0) ||
+                (check.0 > size.0 - 1) || (check.1 > size.1 - 1) {
+                side_a_oob += 1;
+                continue;
+            } else if path_set.contains(&check) {
+                continue;
+            } else if !side_a.contains(&check) {
+                to_search.insert(check);
+            }
+        }
+    }
+
+    let mut side_b: BTreeSet<(i32, i32)> = BTreeSet::new();
+    let mut side_b_oob = 0;
+    for p in path_side_b {
+        if path_set.contains(p) {
+            continue;
+        } else if (p.0 < 0) || (p.1 < 0) ||
+            (p.0 > size.0 - 1) || (p.1 > size.1 - 1) {
+            side_b_oob += 1;
+            continue;
+        }
+        to_search.insert(*p);
+        side_b.insert(*p);
+    }
+
+    while to_search.len() > 0 {
+        let current = to_search.pop_first().unwrap();
+        for (dir, delta) in &move_dirs {
+            let check = (current.0 + delta.0, current.1 + delta.1);
+            if (check.0 < 0) || (check.1 < 0) ||
+                (check.0 > size.0 - 1) || (check.1 > size.1 - 1) {
+                side_b_oob += 1;
+                continue;
+            } else if path_set.contains(&check) {
+                continue;
+            } else if !side_b.contains(&check) {
+                to_search.insert(check);
+            }
+            side_b.insert(check);
+        }
+    }
+
+    assert!(side_a_oob == 0 || side_b_oob == 0);
+    assert!((path_set.len() + side_a.len() + side_b.len()) as i32 ==
+            size.0 * size.1);
+
+    if print {
+        for row in 0..size.1 {
+            for col in 0..size.0 {
+                let cell = &(col as i32, row as i32);
+                if path_set.contains(&cell) {
+                    print!("p");
+                } else if side_a.contains(&cell) {
+                    print!("A");
+                } else if side_b.contains(&cell) {
+                    print!("B");
+                } else {
+                    print!(".");
+                }
+            }
+            println!("");
+        }
+    }
+
+    if side_a_oob == 0 {
+        return side_a.len();
+    } else {
+        return side_b.len();
+    }
+}
+
 fn main() -> io::Result<()> {
     let args: Vec<String> = env::args().collect();
     let fname = &args[1];
-
-    let file = File::open(fname)?;
-    let reader = io::BufReader::new(file);
-
+let file = File::open(fname)?; let reader = io::BufReader::new(file);
     let pipe_bases: HashMap<char, ([Direction; 2], Vec<(i32, i32)>, Vec<(i32, i32)>)> = HashMap::from([
         (
             '|',
@@ -229,6 +337,9 @@ fn main() -> io::Result<()> {
 
     let (path, side_a, side_b) = trace_path(&map, &start);
     println!("{}", (path.len() + 1) / 2);
+
+    let inside = find_inside(&map, &path, &size, &side_a, &side_b, false);
+    println!("{}", inside);
 
     Ok(())
 }

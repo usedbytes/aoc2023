@@ -2,6 +2,51 @@ use std::env;
 use std::fs::File;
 use std::io::{self, BufRead};
 
+fn find_galaxies(
+    map: &Vec<Vec<u8>>,
+    empty_cols: &Vec<usize>,
+    empty_rows: &Vec<usize>,
+    stretch_factor: usize,
+) -> Vec<(usize, usize)> {
+    let mut galaxies: Vec<(usize, usize)> = Vec::new();
+    let mut y_stretch = 0;
+    for (y, row) in map.iter().enumerate() {
+        if y_stretch < empty_rows.len() && y > empty_rows[y_stretch] {
+            y_stretch += 1;
+        }
+
+        let mut x_stretch = 0;
+        for (x, cell) in row.iter().enumerate() {
+            if x_stretch < empty_cols.len() && x > empty_cols[x_stretch] {
+                x_stretch += 1;
+            }
+
+            if *cell == b'#' {
+                galaxies.push(
+                    (
+                        x + x_stretch * (stretch_factor - 1),
+                        y + y_stretch * (stretch_factor - 1),
+                    )
+                );
+            }
+        }
+    }
+
+    return galaxies;
+}
+
+fn sum_manhattan_distances_pairwise(galaxies: &Vec<(usize, usize)>) -> u64 {
+    let mut distances = Vec::new();
+    for (i, g1) in galaxies.iter().enumerate() {
+        for g2 in galaxies[i+1..].iter() {
+            let distance = (g1.0 as i32 - g2.0 as i32).abs() + (g1.1 as i32 - g2.1 as i32).abs();
+            distances.push(distance as u64);
+        }
+    }
+
+    return distances.iter().sum();
+}
+
 fn main() -> io::Result<()> {
     let args: Vec<String> = env::args().collect();
     let fname = &args[1];
@@ -41,39 +86,15 @@ fn main() -> io::Result<()> {
         }
     }
 
-    // And finally to find the galaxy coordinates
-    let mut galaxies: Vec<(u32, u32)> = Vec::new();
-    let mut y_stretch = 0;
-    for (y, row) in map.iter().enumerate() {
-        if y_stretch < empty_rows.len() && y > empty_rows[y_stretch] {
-            y_stretch += 1;
-        }
+    // Stretch factor 2 for part 1
+    let p1_galaxies = find_galaxies(&map, &empty_cols, &empty_rows, 2);
+    let p1_sum = sum_manhattan_distances_pairwise(&p1_galaxies);
+    println!("{}", p1_sum);
 
-        let mut x_stretch = 0;
-        for (x, cell) in row.iter().enumerate() {
-            if x_stretch < empty_cols.len() && x > empty_cols[x_stretch] {
-                x_stretch += 1;
-            }
-
-            if *cell == b'#' {
-                galaxies.push(
-                    ((x + x_stretch) as u32, (y + y_stretch) as u32)
-                );
-            }
-        }
-    }
-
-    // Now we're looking for Manhattan distances of all pairs
-    let mut distances = Vec::new();
-    for (i, g1) in galaxies.iter().enumerate() {
-        for g2 in galaxies[i+1..].iter() {
-            let distance = (g1.0 as i32 - g2.0 as i32).abs() + (g1.1 as i32 - g2.1 as i32).abs();
-            distances.push(distance);
-        }
-    }
-
-    let sum: i32 = distances.iter().sum();
-    println!("{}", sum);
+    // Stretch factor 1000000 for part 2!
+    let p2_galaxies = find_galaxies(&map, &empty_cols, &empty_rows, 1000000);
+    let p2_sum = sum_manhattan_distances_pairwise(&p2_galaxies);
+    println!("{}", p2_sum);
 
     Ok(())
 }

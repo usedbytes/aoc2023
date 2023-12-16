@@ -27,9 +27,10 @@ impl Matrix {
         };
     }
 
-    fn find_v_mirror(&self) -> Option<usize> {
+    fn v_mirror_diffs(&self) -> Vec<usize> {
+        let mut result = Vec::new();
         for mirror_after in 0..self.cols - 1 {
-            let mut ok = true;
+            let mut mismatches = 0;
             for src in 0..=mirror_after {
                 if let Some(dst) = reflect(mirror_after, src, self.cols) {
                     for y in 0..self.rows {
@@ -37,24 +38,22 @@ impl Matrix {
                         let b = self.cells[y][dst];
 
                         if a != b {
-                            ok = false;
-                            break;
+                            mismatches += 1;
                         }
                     }
                 }
             }
 
-            if ok {
-                return Some(mirror_after + 1);
-            }
+            result.push(mismatches);
         }
 
-        return None;
+        return result;
     }
 
-    fn find_h_mirror(&self) -> Option<usize> {
+    fn h_mirror_diffs(&self) -> Vec<usize> {
+        let mut result = Vec::new();
         for mirror_after in 0..self.rows - 1 {
-            let mut ok = true;
+            let mut mismatches = 0;
             for src in 0..=mirror_after {
                 if let Some(dst) = reflect(mirror_after, src, self.rows) {
                     for x in 0..self.cols {
@@ -62,19 +61,16 @@ impl Matrix {
                         let b = self.cells[dst][x];
 
                         if a != b {
-                            ok = false;
-                            break;
+                            mismatches += 1;
                         }
                     }
                 }
             }
 
-            if ok {
-                return Some(mirror_after + 1);
-            }
+            result.push(mismatches);
         }
 
-        return None;
+        return result;
     }
 }
 
@@ -86,6 +82,7 @@ fn main() -> io::Result<()> {
     let grids = data.split("\n\n");
 
     let mut total = 0;
+    let mut total2 = 0;
 
     for g in grids {
         let mut rows = Vec::new();
@@ -95,14 +92,39 @@ fn main() -> io::Result<()> {
         }
 
         let m = Matrix::new(rows);
-        if let Some(cols) = m.find_v_mirror() {
-            total += cols;
-        } else if let Some(rows) = m.find_h_mirror() {
-            total += rows * 100;
+
+        let v = m.v_mirror_diffs();
+        let h = m.h_mirror_diffs();
+
+        { // Part 1 - look for zero
+            let p1_cols = v.iter().position(|&val| val == 0);
+            let p1_rows = h.iter().position(|&val| val == 0);
+
+            assert!(p1_cols.is_none() || p1_rows.is_none());
+
+            if let Some(cols) = p1_cols {
+                total += cols + 1;
+            } else if let Some(rows) = p1_rows {
+                total += (rows + 1) * 100;
+            }
+        }
+
+        { // Part 2 - look for one
+            let p2_cols = v.iter().position(|&val| val == 1);
+            let p2_rows = h.iter().position(|&val| val == 1);
+
+            assert!(p2_cols.is_none() || p2_rows.is_none());
+
+            if let Some(cols) = p2_cols {
+                total2 += cols + 1;
+            } else if let Some(rows) = p2_rows {
+                total2 += (rows + 1) * 100;
+            }
         }
     }
 
     println!("{total}");
+    println!("{total2}");
 
     Ok(())
 }

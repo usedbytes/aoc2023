@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::env;
 use std::fs::File;
 use std::io::{self, BufRead};
@@ -6,10 +7,16 @@ fn solve(
     pattern: &Vec<u8>,
     groups: &Vec<usize>,
     min_start: usize,
-    i: usize) -> u32 {
+    i: usize,
+    memo: &mut HashMap<(usize, usize), u64>) -> u64 {
 
     //let indent = "  ".repeat(i + 1);
     //println!("{indent} {i}, {groups:?} {min_start}");
+
+    if let Some(solutions) = memo.get(&(min_start, i)) {
+        //println!("{indent} <-- memo {solutions}");
+        return *solutions;
+    }
 
     let sum_after = groups[i + 1..].iter().sum::<usize>();
     let mut max_start = pattern.len() - sum_after - (groups.len() - i - 1) - groups[i];
@@ -56,7 +63,7 @@ fn solve(
 
         if i < groups.len() - 1 {
             //println!("recurse {}", i + 1);
-            solutions += solve(pattern, groups, end + 1, i + 1);
+            solutions += solve(pattern, groups, end + 1, i + 1, memo);
         } else {
             // Special case for the last group
             if let Some(last_hash) = pattern.iter().rposition(|x| *x == b'#') {
@@ -71,6 +78,7 @@ fn solve(
         }
     }
 
+    memo.insert((min_start, i), solutions);
     //println!("{} <-- {}", indent, solutions);
     return solutions;
 }
@@ -83,6 +91,7 @@ fn main() -> io::Result<()> {
     let reader = io::BufReader::new(file);
 
     let mut total = 0;
+    let mut total2 = 0;
 
     for line in reader.lines() {
         let line = line?;
@@ -93,17 +102,36 @@ fn main() -> io::Result<()> {
             .map(|v| v.parse::<usize>().unwrap())
             .collect();
 
-        //println!("pattern: {}, groups: {:?});
+        //println!("pattern: {}, groups: {:?}", pattern, groups);
 
+        let mut memo = HashMap::new();
         let pattern = pattern.bytes().collect();
-        let solutions = solve(&pattern, &groups, 0, 0);
+        let solutions = solve(&pattern, &groups, 0, 0, &mut memo);
 
         //println!("solutions: {}", solutions);
 
         total += solutions;
+
+        let mut pattern2 = Vec::new();
+        for repeat in 0..5 {
+            for b in &pattern {
+                pattern2.push(*b);
+            }
+            if repeat < 4 {
+                pattern2.push(b'?');
+            }
+        }
+        let groups2 = groups.repeat(5);
+
+        //println!("pattern2: {}, groups2: {:?}", String::from_utf8_lossy(&pattern2), groups2);
+
+        let mut memo2 = HashMap::new();
+        let solutions2 = solve(&pattern2, &groups2, 0, 0, &mut memo2);
+        total2 += solutions2;
     }
 
     println!("{total}");
+    println!("{total2}");
 
     Ok(())
 }

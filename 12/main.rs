@@ -1,53 +1,29 @@
 use std::env;
-use std::fmt;
 use std::fs::File;
 use std::io::{self, BufRead};
-
-struct Mask {
-    min: usize,
-    max: usize,
-    mask: u32,
-}
-
-impl Mask {
-    fn new(min: usize, max: usize) -> Mask {
-        let n = (max + 1) - min;
-        let mask = (1 << n) - 1;
-        return Mask{
-            min: min,
-            max: max,
-            mask: mask << min,
-        };
-    }
-}
-
-impl fmt::Display for Mask {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:020b}", self.mask)
-    }
-}
-
-impl fmt::Debug for Mask {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        fmt::Display::fmt(self, f)
-    }
-}
 
 fn solve(
     pattern: &Vec<u8>,
     groups: &Vec<usize>,
-    start_masks: &Vec<Mask>,
-    start_mask: &Mask,
+    min_start: usize,
     i: usize) -> u32 {
 
     //let indent = "  ".repeat(i + 1);
-    //println!("{indent} {i}, {groups:?} {start_mask}");
+    //println!("{indent} {i}, {groups:?} {min_start}");
 
-    let top_bit = start_mask.max;
-    let bottom_bit = start_mask.min;
+    let sum_after = groups[i + 1..].iter().sum::<usize>();
+    let mut max_start = pattern.len() - sum_after - (groups.len() - i - 1) - groups[i];
+
+    // Can't skip the next hash
+    if let Some(next_hash) = pattern[min_start..].iter().position(|&b| b == b'#') {
+        let next_hash = next_hash + min_start;
+        //println!("{indent} next_hash: {next_hash}");
+        max_start = std::cmp::min(max_start, next_hash);
+    }
+
     let mut solutions = 0;
 
-    for bit in bottom_bit..=top_bit {
+    for bit in min_start..=max_start {
         //print!("{indent} bit {bit}: ");
         // Can it start here?
         if pattern[bit] == b'.' {
@@ -79,31 +55,12 @@ fn solve(
         }
 
         if i < groups.len() - 1 {
-            let next_start = std::cmp::max(start_masks[i].min, bit + groups[i] + 1);
-
-            // Make sure we don't "jump over" a hash
-            let mut next_end = start_masks[i + 1].max;
-            for j in end..pattern.len() {
-                if pattern[j] == b'#' {
-                    next_end = std::cmp::min(next_end, j);
-                }
-            }
-
-            // Sanity
-            if next_start > next_end {
-                panic!();
-            }
-
-            let next_mask = Mask::new(next_start, next_end);
             //println!("recurse {}", i + 1);
-            solutions += solve(pattern, groups, start_masks, &next_mask, i + 1);
+            solutions += solve(pattern, groups, end + 1, i + 1);
         } else {
             // Special case for the last group
             if let Some(last_hash) = pattern.iter().rposition(|x| *x == b'#') {
-                if start_mask.min <= last_hash && bit > last_hash {
-                    //println!("hash before {}", bit);
-                    continue;
-                } else if last_hash > end {
+                if last_hash > end {
                     //println!("hash after {}", bit);
                     continue;
                 }
@@ -136,33 +93,11 @@ fn main() -> io::Result<()> {
             .map(|v| v.parse::<usize>().unwrap())
             .collect();
 
-        let mut min_starts = vec![0; groups.len()];
-        for i in 1..min_starts.len() {
-            min_starts[i] = min_starts[i - 1] + groups[i - 1] + 1;
-        }
-
-        let mut max_starts = vec![0; groups.len()];
-        max_starts[groups.len() - 1] = pattern.len() - groups[groups.len() - 1];
-        for i in (0..max_starts.len() - 1).rev() {
-            max_starts[i] = max_starts[i + 1] - groups[i] - 1;
-        }
-
-        if let Some(first_hash) = pattern.find('#') {
-            max_starts[0] = std::cmp::min(first_hash, max_starts[0]);
-        }
-
-        let start_masks = Vec::from_iter(
-            (0..groups.len())
-            .map(|i| Mask::new(
-                min_starts[i],
-                max_starts[i]
-            ))
-        );
-
-        //println!("pattern: {}, groups: {:?}, starts: {:?}", pattern, groups, start_masks);
+        //println!("pattern: {}, groups: {:?});
 
         let pattern = pattern.bytes().collect();
-        let solutions = solve(&pattern, &groups, &start_masks, &start_masks[0], 0);
+        let solutions = solve(&pattern, &groups, 0, 0);
+
         //println!("solutions: {}", solutions);
 
         total += solutions;

@@ -98,11 +98,11 @@ fn explore(
 
         cheapest.insert((pos.0, pos.1, dir, straight), cost);
 
-        if pos == goal {
+        let (allowed_turn, allowed_straight) = allowed_dirs(straight);
+
+        if pos == goal && allowed_turn {
             return cost;
         }
-
-        let (allowed_turn, allowed_straight) = allowed_dirs(straight);
 
         if allowed_turn { // Turn right
             let nd = ((dir as i32 + 1).rem_euclid(4)) as usize;

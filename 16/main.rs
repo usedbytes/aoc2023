@@ -18,29 +18,12 @@ fn valid(nrows: usize, ncols: usize, pos: (i32, i32)) -> bool {
     return false;
 }
 
-fn main() -> io::Result<()> {
-    let args: Vec<String> = env::args().collect();
-    let fname = &args[1];
-
-    let file = File::open(fname)?;
-    let reader = io::BufReader::new(file);
-
-    let mut cave = Vec::new();
-
-    for line in reader.lines() {
-        let line = line?;
-        let row = Vec::from_iter(line.chars());
-        cave.push(row);
-    }
-
+fn trace_rays(cave: &Vec<Vec<char>>, first_ray: &Ray) -> usize {
     let nrows = cave.len();
     let ncols = cave[0].len();
 
     let mut rays = BTreeSet::new();
-    rays.insert(Ray{
-        pos: (0, 0),
-        dir: (1, 0),
-    });
+    rays.insert(first_ray.clone());
 
     let mut energized = BTreeSet::new();
     let mut traced_rays = BTreeSet::new();
@@ -123,6 +106,7 @@ fn main() -> io::Result<()> {
         }
     }
 
+    /*
     for y in 0..nrows {
         for x in 0..ncols {
             if energized.contains(&(x, y)) {
@@ -134,6 +118,60 @@ fn main() -> io::Result<()> {
         println!("");
     }
     println!("{}", energized.len());
+    */
+
+    return energized.len();
+}
+
+fn main() -> io::Result<()> {
+    let args: Vec<String> = env::args().collect();
+    let fname = &args[1];
+
+    let file = File::open(fname)?;
+    let reader = io::BufReader::new(file);
+
+    let mut cave = Vec::new();
+
+    for line in reader.lines() {
+        let line = line?;
+        let row = Vec::from_iter(line.chars());
+        cave.push(row);
+    }
+
+    let part1 = trace_rays(&cave, &Ray{ pos: (0, 0), dir: (1, 0) });
+    println!("{}", part1);
+
+    let mut max_energized = 0;
+
+    for i in 0..cave.len() {
+        let e = trace_rays(&cave, &Ray{
+            pos: (0, i), dir: (1, 0),
+        });
+
+        max_energized = std::cmp::max(e, max_energized);
+
+        let e = trace_rays(&cave, &Ray{
+            pos: (cave[0].len() - 1, i), dir: (-1, 0),
+        });
+
+        max_energized = std::cmp::max(e, max_energized);
+    }
+
+    for i in 0..cave[0].len() {
+        let e = trace_rays(&cave, &Ray{
+            pos: (i, 0), dir: (0, 1),
+        });
+
+        max_energized = std::cmp::max(e, max_energized);
+
+        let e = trace_rays(&cave, &Ray{
+            pos: (i, cave.len() - 1), dir: (0, -1),
+        });
+
+        max_energized = std::cmp::max(e, max_energized);
+    }
+
+    println!("{}", max_energized);
 
     Ok(())
 }

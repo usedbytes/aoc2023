@@ -51,8 +51,17 @@ impl PartialOrd for State {
     }
 }
 
+fn allowed_dirs_part1(straight: usize) -> (bool, bool) {
+    return (true, straight < 2);
+}
+
+fn allowed_dirs_part2(straight: usize) -> (bool, bool) {
+    return (straight >= 3, straight < 9);
+}
+
 fn explore(
     map: &Vec<Vec<u8>>,
+    allowed_dirs: fn(usize) -> (bool, bool),
 ) -> u32 {
     let mut to_explore = BinaryHeap::new();
 
@@ -93,7 +102,9 @@ fn explore(
             return cost;
         }
 
-        { // Turn right
+        let (allowed_turn, allowed_straight) = allowed_dirs(straight);
+
+        if allowed_turn { // Turn right
             let nd = ((dir as i32 + 1).rem_euclid(4)) as usize;
             if let Some(next) = move_in_dir(map, &pos, nd) {
                 let next_cost = cost + map[next.1][next.0] as u32;
@@ -107,7 +118,7 @@ fn explore(
             }
         }
 
-        { // Turn left
+        if allowed_turn { // Turn left
             let nd = ((dir as i32 - 1).rem_euclid(4)) as usize;
             if let Some(next) = move_in_dir(map, &pos, nd) {
                 let next_cost = cost + map[next.1][next.0] as u32;
@@ -121,7 +132,7 @@ fn explore(
             }
         }
 
-        if straight < 2 { // Straight
+        if allowed_straight { // Straight
             let nd = dir;
             if let Some(next) = move_in_dir(map, &pos, nd) {
                 let next_cost = cost + map[next.1][next.0] as u32;
@@ -157,8 +168,11 @@ fn main() -> io::Result<()> {
         map.push(row);
     }
 
-    let cost = explore(&map);
+    let cost = explore(&map, allowed_dirs_part1);
     println!("{cost}");
+
+    let cost2 = explore(&map, allowed_dirs_part2);
+    println!("{cost2}");
 
     Ok(())
 }

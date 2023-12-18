@@ -35,6 +35,30 @@ fn flood_fill(
     return trench.len();
 }
 
+fn polygon_area(verts: &Vec<(i32, i32)>) -> i64 {
+    let mut area: i64 = 0;
+    for i in 0..verts.len() - 1 {
+        let v1 = verts[i];
+        let v2 = verts[i + 1];
+        let a = ((v1.1 as i64 + v2.1 as i64) * ((v1.0 as i64 - v2.0 as i64))) / 2;
+        area += a;
+    }
+
+    return area;
+}
+
+fn polygon_perimeter(verts: &Vec<(i32, i32)>) -> i64 {
+    let mut perimeter: i64 = 0;
+
+    for i in 0..verts.len() - 1 {
+        let v1 = verts[i];
+        let v2 = verts[i + 1];
+        perimeter += (v2.0 - v1.0).abs() as i64 + (v2.1 - v1.1).abs() as i64;
+    }
+
+    return perimeter;
+}
+
 fn main() -> io::Result<()> {
     let args: Vec<String> = env::args().collect();
     let fname = &args[1];
@@ -51,9 +75,13 @@ fn main() -> io::Result<()> {
 
     let mut perimeter: BTreeMap<(i32, i32), u32> = BTreeMap::new();
     let mut pos: (i32, i32) = (0, 0);
+    let mut pos2: (i32, i32) = (0, 0);
 
     let mut max = (0, 0);
     let mut min = (0, 0);
+
+    let mut verts = Vec::new();
+    verts.push(pos2);
 
     for line in reader.lines() {
         let line = line?;
@@ -73,6 +101,14 @@ fn main() -> io::Result<()> {
             max.0 = std::cmp::max(max.0, pos.0);
             max.1 = std::cmp::max(max.1, pos.1);
         }
+
+        let dir2 = DIRS[(color & 0xf) as usize];
+        let n2 = (color >> 4) as i32;
+        pos2 = (
+            pos2.0 + dir2.0 * n2,
+            pos2.1 + dir2.1 * n2,
+        );
+        verts.push(pos2);
     }
 
     // FIXME: Assumes (1, 1) is inside, which might not be true.
@@ -80,6 +116,10 @@ fn main() -> io::Result<()> {
 
     let size = flood_fill(&perimeter, &start);
     println!("{size}");
+
+    let area = polygon_area(&verts);
+    let perimeter = polygon_perimeter(&verts);
+    println!("{}", area + perimeter / 2 + 1);
 
     /*
     for row in min.1..=max.1 {

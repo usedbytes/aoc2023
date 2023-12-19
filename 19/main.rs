@@ -4,6 +4,7 @@ use std::fs::File;
 use std::collections::HashMap;
 use std::io::{self, BufRead};
 use std::str::FromStr;
+use std::ops::Range;
 
 #[derive(Debug, Clone)]
 struct ParseErr;
@@ -38,6 +39,63 @@ impl FromStr for Category {
     }
 }
 
+#[derive(Debug, Clone)]
+struct RangePart {
+    x: Range<u32>,
+    m: Range<u32>,
+    a: Range<u32>,
+    s: Range<u32>,
+}
+
+impl RangePart {
+    fn is_empty(&self) -> bool {
+        return self.x.is_empty() || self.m.is_empty() || self.a.is_empty() || self.s.is_empty();
+    }
+
+    fn overlap(&self, other: &RangePart) -> RangePart {
+        return RangePart{
+            x: Range{
+                start: std::cmp::max(self.x.start, other.x.start),
+                end: std::cmp::min(self.x.end, other.x.end),
+            },
+            m: Range{
+                start: std::cmp::max(self.m.start, other.m.start),
+                end: std::cmp::min(self.m.end, other.m.end),
+            },
+            a: Range{
+                start: std::cmp::max(self.a.start, other.a.start),
+                end: std::cmp::min(self.a.end, other.a.end),
+            },
+            s: Range{
+                start: std::cmp::max(self.s.start, other.s.start),
+                end: std::cmp::min(self.s.end, other.s.end),
+            },
+        }
+    }
+
+    fn count(&self) -> u64 {
+        if self.is_empty() {
+            return 0;
+        }
+
+        let mut p: u64 = 1;
+
+        if !self.x.is_empty() {
+            p *= (self.x.end - self.x.start) as u64;
+        }
+        if !self.m.is_empty() {
+            p *= (self.m.end - self.m.start) as u64;
+        }
+        if !self.a.is_empty() {
+            p *= (self.a.end - self.a.start) as u64;
+        }
+        if !self.s.is_empty() {
+            p *= (self.s.end - self.s.start) as u64;
+        }
+
+        return p;
+    }
+}
 
 #[derive(Debug, Clone)]
 struct Part {
@@ -140,6 +198,52 @@ impl Rule {
             _ => Err(ParseErr),
         }
     }
+
+    fn check_range(&self, part: &RangePart) -> (RangePart, RangePart) {
+        if let Some(category) = &self.category {
+            let mut pass = part.clone();
+            let mut fail = part.clone();
+
+            let (pass_range, fail_range) = match category {
+                Category::X => {
+                    (&mut pass.x, &mut fail.x)
+                },
+                Category::M => {
+                    (&mut pass.m, &mut fail.m)
+                },
+                Category::A => {
+                    (&mut pass.a, &mut fail.a)
+                },
+                Category::S => {
+                    (&mut pass.s, &mut fail.s)
+                },
+            };
+
+            match self.rule_type {
+                RuleType::Lt => {
+                    pass_range.end = std::cmp::min(pass_range.end, self.value);
+                    fail_range.start = std::cmp::max(fail_range.start, self.value);
+                },
+                RuleType::Gt => {
+                    pass_range.start = std::cmp::max(pass_range.start, self.value + 1);
+                    fail_range.end = std::cmp::min(fail_range.end, self.value + 1);
+                },
+                _ => unreachable!(),
+            }
+
+            return (pass, fail);
+        }
+
+        return (
+            part.clone(),
+            RangePart{
+                x: Range{ start: 0, end: 0 },
+                m: Range{ start: 0, end: 0 },
+                a: Range{ start: 0, end: 0 },
+                s: Range{ start: 0, end: 0 },
+            }
+        )
+    }
 }
 
 impl FromStr for Rule {
@@ -227,6 +331,45 @@ fn main() -> Result<(), Box<dyn Error>> {
         if name == "A" {
             total += part.value();
         }
+    }
+
+    println!("{total}");
+
+    let mut live = Vec::new();
+    live.push((
+        "in".to_string(),
+        RangePart{
+            x: Range{ start: 1, end: 4001 },
+            m: Range{ start: 1, end: 4001 },
+            a: Range{ start: 1, end: 4001 },
+            s: Range{ start: 1, end: 4001 },
+        },
+    ));
+
+    let mut accept = Vec::new();
+
+    while let Some((name, range)) = live.pop() {
+        let wf = workflows.get(&name).unwrap();
+        let mut range = range;
+        for rule in &wf.rules {
+            let (pass, fail) = rule.check_range(&range);
+
+            if !pass.is_empty() {
+                match rule.target.as_str() {
+                    "A" => { accept.push(pass); },
+                    "R" => { },
+                    _ =>  { live.push((rule.target.to_string(), pass)); },
+                }
+            }
+
+            range = fail;
+        }
+        assert!(range.is_empty());
+    }
+
+    let mut total = 0;
+    for a in &accept {
+        total += a.count();
     }
 
     println!("{total}");

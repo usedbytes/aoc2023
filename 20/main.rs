@@ -108,6 +108,26 @@ impl Module {
             ModuleKind::Unknown => { None },
         }
     }
+
+    fn reset(&mut self) {
+        self.state = false;
+        for v in self.inputs.values_mut() {
+            *v = Pulse::Low;
+        }
+    }
+}
+
+fn dump_dot(modules: &HashMap<String, Module>) {
+    println!("digraph G {{");
+
+    for (name, module) in modules {
+        println!("   {} [label=\"{}\\n{:?}\"]", name, name, module.kind);
+        for target in &module.outputs {
+            println!("    {} -> {}", name, target);
+        }
+    }
+
+    println!("}}");
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -146,6 +166,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
+    dump_dot(&modules);
+    return Ok(());
+
     let mut pulses: VecDeque<(String, String, Pulse)> = VecDeque::new();
 
     let mut high_pulses: u64 = 0;
@@ -173,6 +196,38 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     println!("{}", low_pulses * high_pulses);
+
+    for module in modules.values_mut() {
+        module.reset();
+    }
+
+    let mut high_pulses: u64 = 0;
+    let mut low_pulses: u64 = 0;
+
+    let mut num_buttons = 0;
+    'done: loop {
+        pulses.push_back(("button".to_string(), "broadcaster".to_string(), Pulse::Low));
+        num_buttons += 1;
+
+        while let Some((source, target, pulse)) = pulses.pop_front() {
+            if target == "lg" && pulse == Pulse::High {
+                println!("{} {} -{:?}-> {}", num_buttons, source, pulse, target);
+            }
+
+            if target == "rx" && pulse == Pulse::Low {
+                break 'done;
+            }
+
+            let module = modules.get_mut(&target).unwrap();
+            if let Some(new_pulses) = module.receive_pulse(&source, pulse) {
+                for (new_target, new_pulse) in new_pulses {
+                    pulses.push_back((target.clone(), new_target, new_pulse));
+                }
+            }
+        }
+    }
+
+    println!("{}", num_buttons);
 
     Ok(())
 }

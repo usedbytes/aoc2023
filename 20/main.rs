@@ -1,7 +1,7 @@
 use std::env;
 use std::error::Error;
 use std::fs::File;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::io::{self, BufRead};
 use std::str::FromStr;
 use regex::Regex;
@@ -17,7 +17,7 @@ impl std::fmt::Display for ParseErr {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 enum ModuleKind {
     Broadcaster,
     FlipFlop,
@@ -130,6 +130,26 @@ fn dump_dot(modules: &HashMap<String, Module>) {
     println!("}}");
 }
 
+fn get_factors(n: u32) -> HashSet<u32> {
+    let mut i = 2;
+    let mut factors = HashSet::new();
+
+    while i <= n {
+        let div = n / i;
+        let rem = n % i;
+
+        if rem == 0 {
+            if !factors.insert(div) || !factors.insert(i) {
+                return factors;
+            }
+        }
+
+        i += 1;
+    }
+
+    return factors;
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = env::args().collect();
     let fname = &args[1];
@@ -166,8 +186,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
-    dump_dot(&modules);
-    return Ok(());
+    //dump_dot(&modules);
+    //return Ok(());
 
     let mut pulses: VecDeque<(String, String, Pulse)> = VecDeque::new();
 
@@ -197,12 +217,25 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     println!("{}", low_pulses * high_pulses);
 
+    // Start over
     for module in modules.values_mut() {
         module.reset();
     }
 
-    let mut high_pulses: u64 = 0;
-    let mut low_pulses: u64 = 0;
+    // Find who feeds "rx"
+    let rx_inputs = &modules.get("rx").unwrap().inputs;
+    assert!(rx_inputs.len() == 1);
+
+    let rx_input = rx_inputs.keys().collect::<Vec<&String>>()[0].clone();
+
+    let final_module = modules.get(&rx_input).unwrap();
+    assert!(final_module.kind == ModuleKind::Conjunction);
+
+    // It's a Conjunction, so we need to track the high pulses arriving
+    // on its input
+    let mut high_pulses: HashMap<String, Vec<u32>> = HashMap::from_iter(
+        final_module.inputs.keys().map(|v| (v.clone(), vec![0]))
+    );
 
     let mut num_buttons = 0;
     'done: loop {
@@ -210,12 +243,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         num_buttons += 1;
 
         while let Some((source, target, pulse)) = pulses.pop_front() {
-            if target == "lg" && pulse == Pulse::High {
-                println!("{} {} -{:?}-> {}", num_buttons, source, pulse, target);
-            }
-
-            if target == "rx" && pulse == Pulse::Low {
-                break 'done;
+            if pulse == Pulse::High && target == rx_input {
+                if let Some(highs) = high_pulses.get_mut(&source) {
+                    highs.push(num_buttons);
+                }
             }
 
             let module = modules.get_mut(&target).unwrap();
@@ -225,9 +256,30 @@ fn main() -> Result<(), Box<dyn Error>> {
                 }
             }
         }
+
+        // Wait until we've seen 3 high pulses from each input
+        if high_pulses.values().all(|v| v.len() > 3) {
+            break 'done;
+        }
     }
 
-    println!("{}", num_buttons);
+    // Make sure the cycle lengths of each input are consistent, and find their
+    // factors
+    let mut all_factors: HashSet<u32> = HashSet::new();
+    for (k, v) in &high_pulses {
+        let cycle_length = v[1] - v[0];
+        for i in 2..v.len() {
+            assert!(v[i] - v[i - 1] == cycle_length);
+        }
+
+        all_factors.extend(get_factors(cycle_length).iter());
+    }
+
+    // We must have all prime factors, otherwise more work is needed
+    // to find lcm
+    assert!(all_factors.len() == high_pulses.len() + 1);
+
+    println!("{}", all_factors.iter().map(|&v| v as u64).product::<u64>());
 
     Ok(())
 }

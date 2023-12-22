@@ -83,7 +83,7 @@ impl Brick {
         return true;
     }
 
-    fn drop(&mut self, floor: &mut BTreeMap<(u32, u32), u32>) {
+    fn drop(&mut self, floor: &mut BTreeMap<(u32, u32), u32>) -> bool {
         let mut max_z = 0;
         for y in self.start.y..=self.end.y {
             for x in self.start.x..=self.end.x {
@@ -93,6 +93,8 @@ impl Brick {
         }
 
         let new_z = max_z + 1;
+        let changed = !(new_z == self.start.z);
+
         let z_offs = self.start.z - new_z;
         self.start.z = new_z;
         self.end.z = self.end.z - z_offs;
@@ -102,6 +104,8 @@ impl Brick {
                 floor.insert((x, y), self.end.z);
             }
         }
+
+        return changed;
     }
 }
 
@@ -183,6 +187,22 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     println!("{}", candidates.len());
+
+
+    // Try and just brute-force part 2?
+    let mut total = 0;
+    for i in 0..bricks.len() {
+        let mut new_bricks = [&bricks[0..i], &bricks[i + 1..]].concat();
+
+        let mut floor: BTreeMap<(u32, u32), u32> = BTreeMap::new();
+        for b in new_bricks.iter_mut() {
+            if b.drop(&mut floor) {
+                total += 1;
+            }
+        }
+    }
+    println!("{}", total);
+
 
     Ok(())
 }

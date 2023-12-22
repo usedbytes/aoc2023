@@ -11,6 +11,8 @@ const DIRS: [(i32, i32); 4] = [
     (0, -1),
 ];
 
+const NTILES: usize = 3;
+
 fn move_in_dir(
     map: &Vec<Vec<char>>,
     from: &(usize, usize),
@@ -20,12 +22,15 @@ fn move_in_dir(
     let nx = from.0 as i32 + dp.0;
     let ny = from.1 as i32 + dp.1;
 
-    if nx < 0 || nx >= map[0].len() as i32 ||
-        ny < 0 || ny >= map.len() as i32 {
+    let maxx = map[0].len() * NTILES;
+    let maxy = map.len() * NTILES;
+
+    if nx < 0 || nx >= maxx as i32 ||
+        ny < 0 || ny >= maxy as i32 {
         return None;
     }
 
-    if map[ny as usize][nx as usize] == '#' {
+    if map[ny as usize % map.len()][nx as usize % map[0].len()] == '#' {
         return None;
     }
 
@@ -92,18 +97,27 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let min_distance = build_min_distance(&garden, &start);
 
-    /*
-    for y in 0..garden.len() {
-        for x in 0..garden[0].len() {
+    for y in 0..garden.len() * NTILES {
+        if y % garden.len() == 0 {
+            println!("     {}\n", "-".repeat((garden[0].len() * NTILES + 1) * 5));
+        }
+        for x in 0..garden[0].len() * NTILES {
+            if x % garden[0].len() == 0 {
+                print!("  |  ");
+            }
             if let Some(distance) = min_distance.get(&(x, y)) {
-                print!("{:>3}|", distance);
+                if (*distance & 1 == 0) {
+                    print!(" {:>3} ", distance);
+                } else {
+                    print!("     ");
+                }
+                //print!(" {:>3} ", distance);
             } else {
-                print!(" # |");
+                print!(" ### ");
             }
         }
-        println!("");
+        println!("\n");
     }
-    */
 
     // A square is reachable if its min distance is less than the number of
     // steps, and also has the same "LSB" as the number of steps.

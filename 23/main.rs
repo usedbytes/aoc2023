@@ -1,7 +1,7 @@
 use std::env;
 use std::error::Error;
 use std::io::{self, BufRead};
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 use std::fs::File;
 
 const DIRS: [(i32, i32); 4] = [
@@ -37,10 +37,12 @@ fn explore(
     from: &(usize, usize),
     goal: &(usize, usize),
     path: &HashSet<(usize, usize)>,
-    prev_cell: char) -> Vec<usize> {
+    prev_cell: char,
+    part2: &bool) -> Vec<usize> {
 
     let mut current = *from;
     let mut path = path.clone();
+    let start_n = path.len();
 
     loop {
         path.insert(current.clone());
@@ -50,12 +52,13 @@ fn explore(
         }
 
         let cell = map[current.1][current.0];
-        let dirs = match cell {
-            '>' => 0..=0,
-            'v' => 1..=1,
-            '<' => 2..=2,
-            '^' => 3..=3,
-            _ => 0..=3,
+        let dirs = match (part2, cell) {
+            (false, '>') => 0..=0,
+            (false, 'v') => 1..=1,
+            (false, '<') => 2..=2,
+            (false, '^') => 3..=3,
+            (false, _) => 0..=3,
+            (true, _) => 0..=3,
         };
 
         let dirs: Vec<usize> = dirs.collect();
@@ -70,7 +73,7 @@ fn explore(
         if options.len() > 1 {
             let mut results = Vec::new();
             for option in options {
-                let lengths = explore(map, &option, goal, &path, prev_cell);
+                let lengths = explore(map, &option, goal, &path, prev_cell, part2);
                 results.extend(lengths);
             }
             return results;
@@ -114,7 +117,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
     let end = (end_x, map.len() - 1);
 
-    let paths = explore(&map, &start, &end, &HashSet::new(), '.');
+    let paths = explore(&map, &start, &end, &HashSet::new(), '.', &false);
+    println!("{:?}", paths.iter().max().unwrap());
+
+    let paths = explore(&map, &start, &end, &HashSet::new(), '.', &true);
     println!("{:?}", paths.iter().max().unwrap());
 
     Ok(())

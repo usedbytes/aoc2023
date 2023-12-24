@@ -113,6 +113,16 @@ fn main() -> Result<(), Box<dyn Error>> {
         let pos = Vec3::from_str(pos)?;
         let vel = Vec3::from_str(vel)?;
 
+        /*
+        if segments.len() < 10 {
+            println!("{}, {}, {}, {}, {}, {}",
+                     pos.x, pos.y, pos.z,
+                     pos.x + vel.x * 1000000000000,
+                     pos.y + vel.y * 1000000000000,
+                     pos.z + vel.z * 1000000000000);
+        }
+        */
+
         let x_steps_to_min = (region_min - pos.x + (vel.x - vel.x.signum())) / vel.x; 
         let x_steps_to_max = (region_max - pos.x + (vel.x - vel.x.signum())) / vel.x; 
 

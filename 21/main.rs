@@ -11,38 +11,37 @@ const DIRS: [(i32, i32); 4] = [
     (0, -1),
 ];
 
-const NTILES: usize = 3;
+const NTILES: usize = 9;
 
 fn move_in_dir(
-    map: &Vec<Vec<char>>,
-    from: &(usize, usize),
+    garden: &Garden,
+    from: &(i32, i32),
     dir: usize
-) -> Option<(usize, usize)> {
+) -> Option<(i32, i32)> {
     let dp = DIRS[dir];
     let nx = from.0 as i32 + dp.0;
     let ny = from.1 as i32 + dp.1;
 
-    let maxx = map[0].len() * NTILES;
-    let maxy = map.len() * NTILES;
-
-    if nx < 0 || nx >= maxx as i32 ||
-        ny < 0 || ny >= maxy as i32 {
+    if nx < garden.x_bounds.0 || nx > garden.x_bounds.1 ||
+        ny < garden.y_bounds.0 || ny > garden.y_bounds.1 {
         return None;
     }
 
-    if map[ny as usize % map.len()][nx as usize % map[0].len()] == '#' {
+    let c = garden.lookup_infinite(&(nx, ny));
+
+    if c == '#' {
         return None;
     }
 
-    return Some((nx as usize, ny as usize));
+    return Some((nx, ny));
 }
 
 fn build_min_distance(
-    garden: &Vec<Vec<char>>,
-    start: &(usize, usize),
-) -> BTreeMap<(usize, usize), u32> {
+    garden: &Garden,
+    start: &(i32, i32),
+) -> BTreeMap<(i32, i32), u32> {
     // x, y, dir, straight
-    let mut min_distance: BTreeMap<(usize, usize), u32> = BTreeMap::new();
+    let mut min_distance: BTreeMap<(i32, i32), u32> = BTreeMap::new();
     let mut frontier = BinaryHeap::new();
 
     for dir in 0..4 {
@@ -52,8 +51,6 @@ fn build_min_distance(
     }
 
     while let Some((x, y, distance)) = frontier.pop() {
-        //println!("({}, {}), {}", x, y, distance);
-
         if let Some(min) = min_distance.get(&(x, y)) {
             if distance >= *min {
                 continue;
@@ -72,6 +69,45 @@ fn build_min_distance(
     return min_distance;
 }
 
+struct Garden {
+    grid: Vec<Vec<char>>,
+    origin: (usize, usize),
+    x_bounds: (i32, i32),
+    y_bounds: (i32, i32),
+}
+
+impl Garden {
+    fn new(grid: Vec<Vec<char>>, origin: (usize, usize)) -> Garden {
+        let cols = grid[0].len();
+        let rows = grid.len();
+
+        let total_x = cols * NTILES;
+        let total_y = rows * NTILES;
+
+        let minx = -((total_x / 2) as i32);
+        let maxx = (total_x / 2) as i32;
+        let miny = -((total_y / 2) as i32);
+        let maxy = (total_y / 2) as i32;
+
+        return Garden{
+            grid: grid,
+            origin: origin,
+            x_bounds: (minx, maxx),
+            y_bounds: (miny, maxy),
+        };
+    }
+
+    fn lookup_infinite(&self, coord: &(i32, i32)) -> char {
+        let offset = (coord.0 + self.origin.0 as i32, coord.1 + self.origin.1 as i32);
+        let rem = (
+            offset.0.rem_euclid(self.grid[0].len() as i32),
+            offset.1.rem_euclid(self.grid.len() as i32),
+        );
+
+        return self.grid[rem.1 as usize][rem.0 as usize];
+    }
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = env::args().collect();
     let fname = &args[1];
@@ -79,7 +115,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let file = File::open(fname)?;
     let reader = io::BufReader::new(file);
 
-    let mut garden = Vec::new();
+    let mut grid = Vec::new();
     let mut start = (0, 0);
 
     for (y, line) in reader.lines().enumerate() {
@@ -92,31 +128,30 @@ fn main() -> Result<(), Box<dyn Error>> {
                 start = (x, y);
             }
         }
-        garden.push(row);
+        grid.push(row);
     }
 
-    let min_distance = build_min_distance(&garden, &start);
+    let garden = Garden::new(grid, start);
 
-    for y in 0..garden.len() * NTILES {
-        if y % garden.len() == 0 {
-            println!("     {}\n", "-".repeat((garden[0].len() * NTILES + 1) * 5));
+    let min_distance = build_min_distance(&garden, &(0, 0));
+
+    let n = (NTILES / 2) as i32;
+
+    for y in garden.y_bounds.0..=garden.y_bounds.1 {
+        if (y + garden.origin.1 as i32) % (garden.grid[0].len() as i32) == 0 {
+            println!("{}", "-".repeat(((garden.x_bounds.1 - garden.x_bounds.0 + 1) as usize + NTILES - 1) * 5));
         }
-        for x in 0..garden[0].len() * NTILES {
-            if x % garden[0].len() == 0 {
-                print!("  |  ");
+        for x in garden.x_bounds.0..=garden.x_bounds.1 {
+            if (x + garden.origin.0 as i32) % (garden.grid.len() as i32) == 0 {
+                print!(" | ");
             }
             if let Some(distance) = min_distance.get(&(x, y)) {
-                if (*distance & 1 == 0) {
-                    print!(" {:>3} ", distance);
-                } else {
-                    print!("     ");
-                }
-                //print!(" {:>3} ", distance);
+                print!(" {:>3} ", distance);
             } else {
                 print!(" ### ");
             }
         }
-        println!("\n");
+        println!("");
     }
 
     // A square is reachable if its min distance is less than the number of
@@ -136,3 +171,18 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     Ok(())
 }
+
+/* Thoughts:
+ *
+ * - We can probably work out how "wide" the solid area is
+ *    num blocks: 26M - (block(1,0) top left) / block_width
+ * - Then we can work out the top-left of that block
+ *    - Need a function which we give block coords, and it gives distance to 4 corners(?)
+ *    - Confirm that this block has corners <=goal and >=goal
+ *      NOTE: Corners not enough to be sure it's complete. Row y=0 is "weird"
+ * - Then we know there's a strip of blocks up to this of solid
+ * - How many stragglers?
+ *    - Need a function which fills out block, given corners
+ *       - First fill edges based on relative position to origin?
+ *       - Then fill from minimum coord?
+ */
